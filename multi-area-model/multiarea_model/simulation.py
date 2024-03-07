@@ -1,4 +1,3 @@
-
 """
 multiarea_model
 ==============
@@ -16,22 +15,25 @@ is identified by a unique hash label.
 """
 
 import json
-import nest
-import numpy as np
 import os
 import pprint
 import shutil
 import time
+from copy import deepcopy
+
+import nest
+import numpy as np
+from config import base_path
+from dicthash import dicthash
 
 from .analysis_helpers import _load_npy_to_dict, model_iter
-from config import base_path
-from copy import deepcopy
-from .default_params import nested_update, sim_params
 from .default_params import check_custom_params
-from dicthash import dicthash
+from .default_params import nested_update, sim_params
 from .multiarea_helpers import extract_area_dict, create_vector_mask
+
 try:
     from .sumatra_helpers import register_runtime
+
     sumatra_found = True
 except ImportError:
     sumatra_found = False
@@ -227,10 +229,10 @@ class Simulation:
                     non_simulated_cc_input = json.load(f)
             elif replace_non_simulated_areas == 'hom_poisson_stat':
                 non_simulated_cc_input = {source_area_name:
-                                          {source_pop:
-                                           self.network.params['input_params']['rate_ext']
-                                           for source_pop in
-                                           self.network.structure[source_area_name]}
+                                              {source_pop:
+                                                   self.network.params['input_params']['rate_ext']
+                                               for source_pop in
+                                               self.network.structure[source_area_name]}
                                           for source_area_name in self.network.area_list}
             else:
                 raise KeyError("Please define a valid method to"
@@ -241,14 +243,14 @@ class Simulation:
             cc_input = _load_npy_to_dict(replace_cc_input_source, fn_iter)
         elif replace_cc == 'het_poisson_stat':
             with open(self.network.params['connection_params'][
-                    'replace_cc_input_source'], 'r') as f:
+                          'replace_cc_input_source'], 'r') as f:
                 cc_input = json.load(f)
         elif replace_cc == 'hom_poisson_stat':
             cc_input = {source_area_name:
-                        {source_pop:
-                         self.network.params['input_params']['rate_ext']
-                         for source_pop in
-                         self.network.structure[source_area_name]}
+                            {source_pop:
+                                 self.network.params['input_params']['rate_ext']
+                             for source_pop in
+                             self.network.structure[source_area_name]}
                         for source_area_name in self.network.area_list}
 
         t0 = time.time()
@@ -478,7 +480,7 @@ class Area:
                 W_ext = self.network.W[self.name][pop]['external']['external']
                 tau_syn = self.network.params['neuron_params']['single_neuron_dict']['tau_syn_ex']
                 DC = K_ext * W_ext * tau_syn * 1.e-3 * \
-                    self.network.params['rate_ext']
+                     self.network.params['rate_ext']
                 I_e += DC
             nest.SetStatus(gid, {'I_e': I_e})
 
@@ -505,7 +507,7 @@ class Area:
                             self.network.params['neuron_params']['V0_mean'],
                             self.network.params['neuron_params']['V0_sd'],
                             len(local_nodes_pop))
-                            )
+                    )
                     self.num_local_nodes += len(local_nodes_pop)
 
     def connect_populations(self):
@@ -521,15 +523,15 @@ class Area:
             for pop in self.populations:
                 # Always record spikes from all neurons to get correct
                 # statistics
-                nest.Connect(tuple(range(self.gids[pop][0], self.gids[pop][1] + 1)),
-                             self.simulation.spike_detector)
+                nest.Connect(nest.AllToAll(tuple(range(self.gids[pop][0], self.gids[pop][1] + 1)),
+                                           self.simulation.spike_detector))
 
         if self.simulation.params['recording_dict']['record_vm']:
             for pop in self.populations:
                 nrec = int(self.simulation.params['recording_dict']['Nrec_vm_fraction'] *
                            self.neuron_numbers[pop])
-                nest.Connect(self.simulation.voltmeter,
-                             tuple(range(self.gids[pop][0], self.gids[pop][0] + nrec + 1)))
+                nest.Connect(nest.AllToAll(self.simulation.voltmeter,
+                                           tuple(range(self.gids[pop][0], self.gids[pop][0] + nrec + 1))))
         if self.network.params['input_params']['poisson_input']:
             self.poisson_generators = []
             for pop in self.populations:
@@ -539,10 +541,8 @@ class Area:
                 nest.SetStatus(
                     pg, {'rate': self.network.params['input_params']['rate_ext'] * K_ext})
                 syn_spec = {'weight': W_ext}
-                nest.Connect(pg,
-                             tuple(
-                                 range(self.gids[pop][0], self.gids[pop][1] + 1)),
-                             syn_spec=syn_spec)
+                nest.Connect(
+                    nest.AllToAll(pg, tuple(range(self.gids[pop][0], self.gids[pop][1] + 1)), syn_spec=syn_spec))
                 self.poisson_generators.append(pg[0])
 
     def create_additional_input(self, input_type, source_area_name, cc_input):
@@ -585,22 +585,18 @@ class Area:
                     curr_gen = nest.Create('step_current_generator', 1)
                     dt = self.simulation.params['dt']
                     T = self.simulation.params['t_sim']
-                    assert(len(cc_input[source_pop]) == int(T))
+                    assert (len(cc_input[source_pop]) == int(T))
                     nest.SetStatus(curr_gen, {'amplitude_values': K * cc_input[source_pop] * 1e-3,
                                               'amplitude_times': np.arange(dt,
                                                                            T + dt,
                                                                            1.)})
-                    nest.Connect(curr_gen,
-                                 tuple(
-                                     range(self.gids[pop][0], self.gids[pop][1] + 1)),
-                                 syn_spec=syn_spec)
+                    nest.Connect(nest.AllToAll(curr_gen, tuple(range(self.gids[pop][0], self.gids[pop][1] + 1)),
+                                               syn_spec=syn_spec))
                 elif 'poisson_stat' in input_type:  # hom. and het. poisson lead here
                     pg = nest.Create('poisson_generator', 1)
                     nest.SetStatus(pg, {'rate': K * cc_input[source_pop]})
-                    nest.Connect(pg,
-                                 tuple(
-                                     range(self.gids[pop][0], self.gids[pop][1] + 1)),
-                                 syn_spec=syn_spec)
+                    nest.Connect(
+                        nest.AllToAll(pg, tuple(range(self.gids[pop][0], self.gids[pop][1] + 1)), syn_spec=syn_spec))
 
 
 def connect(simulation,
@@ -633,9 +629,6 @@ def connect(simulation,
                              source_area.name)
     for target in target_area.populations:
         for source in source_area.populations:
-            conn_spec = {'rule': 'fixed_total_number',
-                         'N': int(synapses[target][source])}
-
             syn_weight = {'distribution': 'normal_clipped',
                           'mu': W[target][source],
                           'sigma': W_sd[target][source]}
@@ -659,9 +652,8 @@ def connect(simulation,
                         'delay': syn_delay,
                         'model': 'static_synapse'}
 
-            nest.Connect(tuple(range(source_area.gids[source][0],
-                                     source_area.gids[source][1] + 1)),
-                         tuple(range(target_area.gids[target][0],
-                                     target_area.gids[target][1] + 1)),
-                         conn_spec,
-                         syn_spec)
+            nest.Connect(nest.FixedTotalNumber(tuple(range(source_area.gids[source][0],
+                                                           source_area.gids[source][1] + 1)),
+                                               tuple(range(target_area.gids[target][0],
+                                                           target_area.gids[target][1] + 1)),
+                                               N=int(synapses[target][source]), syn_spec=syn_spec))

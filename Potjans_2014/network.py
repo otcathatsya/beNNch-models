@@ -28,8 +28,10 @@ build and simulate the network.
 """
 
 import os
-import numpy as np
+
 import nest
+import numpy as np
+
 import helpers
 
 
@@ -582,8 +584,8 @@ class Network:
                 rate=self.stim_dict['th_rate'],
                 start=self.stim_dict['th_start'],
                 stop=(
-                    self.stim_dict['th_start'] +
-                    self.stim_dict['th_duration']))
+                        self.stim_dict['th_start'] +
+                        self.stim_dict['th_duration']))
         elif self.nest_version == '2':
             nest.SetStatus(
                 self.poisson_th,
@@ -591,8 +593,8 @@ class Network:
                     'rate': self.stim_dict['th_rate'],
                     'start': self.stim_dict['th_start'],
                     'stop': (
-                        self.stim_dict['th_start'] +
-                        self.stim_dict['th_duration'])})
+                            self.stim_dict['th_start'] +
+                            self.stim_dict['th_duration'])})
         else:
             raise Exception('NEST version unknown.')
 
@@ -636,10 +638,6 @@ class Network:
         for i, target_pop in enumerate(self.pops):
             for j, source_pop in enumerate(self.pops):
                 if self.num_synapses[i][j] >= 0.:
-                    conn_dict_rec = {
-                        'rule': 'fixed_total_number',
-                        'N': self.num_synapses[i][j]}
-
                     if self.nest_version == '3':
                         if self.weight_matrix_mean[i][j] < 0:
                             w_min = np.NINF
@@ -662,8 +660,8 @@ class Network:
                                 nest.random.normal(
                                     mean=self.net_dict['delay_matrix_mean'][i][j],
                                     std=(
-                                        self.net_dict['delay_matrix_mean'][i][j] *
-                                        self.net_dict['delay_rel_std'])),
+                                            self.net_dict['delay_matrix_mean'][i][j] *
+                                            self.net_dict['delay_rel_std'])),
                                 min=self.sim_resolution,
                                 max=np.Inf)}
                     elif self.nest_version == '2':
@@ -680,8 +678,8 @@ class Network:
                                 'distribution': 'normal_clipped',
                                 'mu': self.net_dict['delay_matrix_mean'][i][j],
                                 'sigma': (
-                                    self.net_dict['delay_matrix_mean'][i][j] *
-                                    self.net_dict['delay_rel_std']),
+                                        self.net_dict['delay_matrix_mean'][i][j] *
+                                        self.net_dict['delay_rel_std']),
                                 'low': self.sim_resolution}}
                         if self.weight_matrix_mean[i][j] < 0:
                             syn_dict['weight']['high'] = 0.0
@@ -691,9 +689,7 @@ class Network:
                         raise Exception('NEST version unknown.')
 
                     nest.Connect(
-                        source_pop, target_pop,
-                        conn_spec=conn_dict_rec,
-                        syn_spec=syn_dict)
+                        nest.FixedTotalNumber(source_pop, target_pop, N=self.num_synapses[i][j], syn_spec=syn_dict))
 
     def __connect_recording_devices(self):
         """ Connects the recording devices to the microcircuit."""
@@ -703,16 +699,16 @@ class Network:
         for i, target_pop in enumerate(self.pops):
             if 'spike_recorder' in self.sim_dict['rec_dev']:
                 if self.nest_version == '3':
-                    nest.Connect(target_pop, self.spike_recorders[i])
+                    nest.Connect(nest.AllToAll(target_pop, self.spike_recorders[i]))
                 elif self.nest_version == '2':
-                    nest.Connect(target_pop, [self.spike_recorders[i]])
+                    nest.Connect(nest.AllToAll(target_pop, [self.spike_recorders[i]]))
                 else:
                     raise Exception('NEST version unknown.')
             if 'voltmeter' in self.sim_dict['rec_dev']:
                 if self.nest_version == '3':
-                    nest.Connect(self.voltmeters[i], target_pop)
+                    nest.Connect(nest.AllToAll(self.voltmeters[i], target_pop))
                 elif self.nest_version == '2':
-                    nest.Connect([self.voltmeters[i]], target_pop)
+                    nest.Connect(nest.AllToAll([self.voltmeters[i]], target_pop))
                 else:
                     raise Exception('NEST version unknown.')
 
@@ -722,26 +718,18 @@ class Network:
             print('Connecting Poisson generators for background input.')
 
         for i, target_pop in enumerate(self.pops):
-            conn_dict_poisson = {'rule': 'all_to_all'}
-
             if self.nest_version == '3':
                 syn_dict_poisson = {
                     'synapse_model': self.net_dict['synapse_type'],
                     'weight': self.weight_ext,
                     'delay': self.net_dict['delay_poisson']}
-                nest.Connect(
-                    self.poisson_bg_input[i], target_pop,
-                    conn_spec=conn_dict_poisson,
-                    syn_spec=syn_dict_poisson)
+                nest.Connect(nest.AllToAll(self.poisson_bg_input[i], target_pop, syn_spec=syn_dict_poisson))
             elif self.nest_version == '2':
                 syn_dict_poisson = {
                     'model': self.net_dict['synapse_type'],
                     'weight': self.weight_ext,
                     'delay': self.net_dict['delay_poisson']}
-                nest.Connect(
-                    [self.poisson_bg_input[i]], target_pop,
-                    conn_spec=conn_dict_poisson,
-                    syn_spec=syn_dict_poisson)
+                nest.Connect(nest.AllToAll(self.poisson_bg_input[i], target_pop, syn_spec=syn_dict_poisson))
             else:
                 raise Exception('NEST version unknown.')
 
@@ -751,29 +739,25 @@ class Network:
             print('Connecting thalamic input.')
 
         # connect Poisson input to thalamic population
-        nest.Connect(self.poisson_th, self.thalamic_population)
+        nest.Connect(nest.AllToAll(self.poisson_th, self.thalamic_population))
 
         # connect thalamic population to neuronal populations
         for i, target_pop in enumerate(self.pops):
-            conn_dict_th = {
-                'rule': 'fixed_total_number',
-                'N': self.num_th_synapses[i]}
-
             if self.nest_version == '3':
                 syn_dict_th = {
                     'weight': nest.math.redraw(
                         nest.random.normal(
                             mean=self.weight_th,
                             std=self.weight_th *
-                            self.net_dict['weight_rel_std']),
+                                self.net_dict['weight_rel_std']),
                         min=0.0,
                         max=np.Inf),
                     'delay': nest.math.redraw(
                         nest.random.normal(
                             mean=self.stim_dict['delay_th_mean'],
                             std=(
-                                self.stim_dict['delay_th_mean'] *
-                                self.stim_dict['delay_th_rel_std'])),
+                                    self.stim_dict['delay_th_mean'] *
+                                    self.stim_dict['delay_th_rel_std'])),
                         min=self.sim_resolution,
                         max=np.Inf)}
 
@@ -783,21 +767,21 @@ class Network:
                         'distribution': 'normal_clipped',
                         'mu': self.weight_th,
                         'sigma': self.weight_th *
-                        self.net_dict['weight_rel_std'],
+                                 self.net_dict['weight_rel_std'],
                         'low': 0.0},
                     'delay': {
                         'distribution': 'normal_clipped',
                         'mu': self.stim_dict['delay_th_mean'],
                         'sigma': (
-                            self.stim_dict['delay_th_mean'] *
-                            self.stim_dict['delay_th_rel_std']),
+                                self.stim_dict['delay_th_mean'] *
+                                self.stim_dict['delay_th_rel_std']),
                         'low': self.sim_resolution}}
             else:
                 raise Exception('NEST version unknown.')
 
             nest.Connect(
-                self.thalamic_population, target_pop,
-                conn_spec=conn_dict_th, syn_spec=syn_dict_th)
+                nest.FixedTotalNumber(self.thalamic_population, target_pop, syn_spec=syn_dict_th,
+                                      N=self.num_th_synapses[i]))
 
     def __connect_dc_stim_input(self):
         """ Connects the DC generators to the neuronal populations. """
@@ -806,4 +790,4 @@ class Network:
             print('Connecting DC generators.')
 
         for i, target_pop in enumerate(self.pops):
-            nest.Connect(self.dc_stim_input[i], target_pop)
+            nest.Connect(nest.AllToAll(self.dc_stim_input[i], target_pop))

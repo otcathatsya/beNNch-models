@@ -72,13 +72,13 @@ References
 
 """
 
-import numpy as np
 import os
 import time
-import scipy.special as sp
 
 import nest
 import nest.raster_plot
+import numpy as np
+import scipy.special as sp
 
 M_INFO = 10
 M_ERROR = 30
@@ -283,42 +283,32 @@ def build_network():
 
     # Connect Poisson generator to neuron
 
-    nest.Connect(E_stimulus, E_neurons, {'rule': 'all_to_all'},
-                 {'synapse_model': 'syn_ex'})
-    nest.Connect(E_stimulus, I_neurons, {'rule': 'all_to_all'},
-                 {'synapse_model': 'syn_ex'})
+    nest.Connect(nest.AllToAll(E_stimulus, E_neurons, syn_spec={'synapse_model': 'syn_ex'}))
+    nest.Connect(nest.AllToAll(E_stimulus, I_neurons, {'synapse_model': 'syn_ex'}))
 
     nest.message(M_INFO, 'build_network',
                  'Connecting excitatory -> excitatory population.')
 
-    nest.Connect(E_neurons, E_neurons,
-                 {'rule': 'fixed_indegree', 'indegree': CE,
-                  'allow_autapses': False, 'allow_multapses': True},
-                 {'synapse_model': 'stdp_pl_synapse_hom_hpc'})
+    nest.Connect(nest.FixedIndegree(E_neurons, E_neurons, indegree=CE, allow_autapses=False, allow_multapses=True,
+                                    syn_spec={'synapse_model': 'stdp_pl_synapse_hom_hpc'}))
 
     nest.message(M_INFO, 'build_network',
                  'Connecting inhibitory -> excitatory population.')
 
-    nest.Connect(I_neurons, E_neurons,
-                 {'rule': 'fixed_indegree', 'indegree': CI,
-                  'allow_autapses': False, 'allow_multapses': True},
-                 {'synapse_model': 'syn_in'})
+    nest.Connect(nest.FixedIndegree(I_neurons, E_neurons, indegree=CI, allow_autapses=False, allow_multapses=True,
+                                    syn_spec={'synapse_model': 'syn_in'}))
 
     nest.message(M_INFO, 'build_network',
                  'Connecting excitatory -> inhibitory population.')
 
-    nest.Connect(E_neurons, I_neurons,
-                 {'rule': 'fixed_indegree', 'indegree': CE,
-                  'allow_autapses': False, 'allow_multapses': True},
-                 {'synapse_model': 'syn_ex'})
+    nest.Connect(nest.FixedIndegree(E_neurons, E_neurons, indegree=CE, allow_autapses=False, allow_multapses=True,
+                                    syn_spec={'synapse_model': 'syn_ex'}))
 
     nest.message(M_INFO, 'build_network',
                  'Connecting inhibitory -> inhibitory population.')
 
-    nest.Connect(I_neurons, I_neurons,
-                 {'rule': 'fixed_indegree', 'indegree': CI,
-                  'allow_autapses': False, 'allow_multapses': True},
-                 {'synapse_model': 'syn_in'})
+    nest.Connect(nest.FixedIndegree(I_neurons, I_neurons, indegree=CI, allow_autapses=False, allow_multapses=True,
+                                    syn_spec={'synapse_model': 'syn_in'}))
 
     if params['record_spikes']:
         if params['num_threads'] != 1:
@@ -339,8 +329,8 @@ def build_network():
             exit(1)
 
         nest.message(M_INFO, 'build_network', 'Connecting spike recorders.')
-        nest.Connect(local_neurons[:brunel_params['Nrec']], E_recorder,
-                     'all_to_all', 'static_synapse_hpc')
+        nest.Connect(nest.AllToAll(local_neurons[:brunel_params['Nrec']], E_recorder,
+                                   syn_spec={'synapse_model': 'static_synapse_hpc'}))
 
     # read out time used for building
     BuildEdgeTime = time.time() - tic
@@ -390,7 +380,7 @@ def run_simulation():
     total_steps = presim_steps + sim_steps + (1 if presim_remaining_time > 0 else 0) + (
         1 if sim_remaining_time > 0 else 0)
     times, vmsizes, vmpeaks, vmrsss = (
-    np.empty(total_steps), np.empty(total_steps), np.empty(total_steps), np.empty(total_steps))
+        np.empty(total_steps), np.empty(total_steps), np.empty(total_steps), np.empty(total_steps))
     step_data = {key: np.empty(total_steps) for key in step_data_keys}
     tic = time.time()
 
