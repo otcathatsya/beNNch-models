@@ -365,6 +365,7 @@ def run_simulation():
 
     tic = time.time()
 
+    nest.BuildNetwork()
     nest.Prepare()
 
     InitTime = time.time() - tic

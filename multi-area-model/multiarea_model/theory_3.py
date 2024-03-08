@@ -140,6 +140,8 @@ class Theory:
         # multimeter
         nest.Connect(nest.AllToAll(multimeter, neurons))
 
+        nest.BuildNetwork()
+
         # Set initial rates of neurons:
         if self.params['initial_rates'] is not None:
             # iterate over different initial conditions drawn from a random distribution

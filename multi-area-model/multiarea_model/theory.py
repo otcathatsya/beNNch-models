@@ -18,13 +18,14 @@ provedure.
 
 import json
 import pprint
+from copy import copy
+
 import nest
 import numpy as np
-
-from copy import copy
-from .default_params import nested_update, theory_params
-from .default_params import check_custom_params
 from dicthash import dicthash
+
+from .default_params import check_custom_params
+from .default_params import nested_update, theory_params
 from .multiarea_helpers import create_mask, create_vector_mask, dict_to_vector
 from .theory_helpers import d_nu_d_mu_fb_numeric, d_nu_d_sigma_fb_numeric
 
@@ -88,10 +89,10 @@ class Theory:
         neurons = nest.Create('siegert_neuron', dim)
         # external drive
         syn_dict = {'drift_factor': tau * np.array([K[:, -1] * J[:, -1]]).transpose(),
-                    'diffusion_factor': tau * np.array([K[:, -1] * J[:, -1]**2]).transpose(),
+                    'diffusion_factor': tau * np.array([K[:, -1] * J[:, -1] ** 2]).transpose(),
                     'model': 'diffusion_connection',
                     'receptor_type': 0}
-        nest.Connect(drive, neurons, 'all_to_all', syn_dict)
+        nest.Connect(nest.AllToAll(drive, neurons, syn_spec=syn_dict))
 
         # external DC drive (expressed in mV)
         DC_drive = nest.Create(
@@ -103,7 +104,7 @@ class Theory:
                     'diffusion_factor': 0.,
                     'model': 'diffusion_connection',
                     'receptor_type': 0}
-        nest.Connect(DC_drive, neurons, 'all_to_all', syn_dict)
+        nest.Connect(nest.AllToAll(DC_drive, neurons, syn_spec=syn_dict))
         # handle switches for cortico-cortical connectivity
         if (self.network.params['connection_params']['replace_cc'] in
                 ['hom_poisson_stat', 'het_poisson_stat']):
@@ -117,17 +118,17 @@ class Theory:
                         'diffusion_factor': np.array([sigma2_CC]).transpose(),
                         'model': 'diffusion_connection',
                         'receptor_type': 0}
-            nest.Connect(add_drive, neurons, 'all_to_all', syn_dict)
+            nest.Connect(nest.AllToAll(add_drive, neurons, syn_spec=syn_dict))
         elif self.network.params['connection_params']['replace_cc'] == 'het_current_nonstat':
             raise NotImplementedError('Replacing the cortico-cortical input by'
                                       ' non-stationary current input is not supported'
                                       ' in the Theory class.')
         # network connections
         syn_dict = {'drift_factor': tau * K[:, :-1] * J[:, :-1],
-                    'diffusion_factor': tau * K[:, :-1] * J[:, :-1]**2,
+                    'diffusion_factor': tau * K[:, :-1] * J[:, :-1] ** 2,
                     'model': 'diffusion_connection',
                     'receptor_type': 0}
-        nest.Connect(neurons, neurons, 'all_to_all', syn_dict)
+        nest.Connect(nest.AllToAll(neurons, neurons, syn_spec=syn_dict))
 
         # create recording device
         interval = self.params['rec_interval']
@@ -140,7 +141,9 @@ class Theory:
                                                        'to_file': False,
                                                        'to_memory': True})
         # multimeter
-        nest.Connect(multimeter, neurons)
+        nest.Connect(nest.Allmultimeter, neurons)
+
+        nest.BuildNetwork()
 
         # Set initial rates of neurons:
         if self.params['initial_rates'] is not None:
@@ -196,7 +199,7 @@ class Theory:
         sigma2_CC = np.array([])
         if self.network.params['connection_params']['replace_cc'] == 'het_poisson_stat':
             with open(self.network.params['connection_params'][
-                    'replace_cc_input_source'], 'r') as f:
+                          'replace_cc_input_source'], 'r') as f:
                 rates = json.load(f)
                 self.cc_input_rates = dict_to_vector(rates,
                                                      self.network.area_list,
@@ -220,7 +223,7 @@ class Theory:
             J_CC = self.network.J_matrix[mask].reshape((area_dim,
                                                         N_input_pops))
             mu_CC = np.append(mu_CC, np.dot(K_CC * J_CC, rate_vector))
-            sigma2_CC = np.append(sigma2_CC, np.dot(K_CC * J_CC**2, rate_vector))
+            sigma2_CC = np.append(sigma2_CC, np.dot(K_CC * J_CC ** 2, rate_vector))
         tau = self.NP['tau_m'] * 1e-3
         mu_CC *= tau
         sigma2_CC *= tau
@@ -314,20 +317,20 @@ class Theory:
         sigma : numpy.ndarray
             Variance of input to the populations
         """
-        d_nu_d_mu = np.array([d_nu_d_mu_fb_numeric(1.e-3*self.NP['tau_m'],
-                                                   1.e-3*self.NP['tau_syn'],
-                                                   1.e-3*self.NP['t_ref'],
+        d_nu_d_mu = np.array([d_nu_d_mu_fb_numeric(1.e-3 * self.NP['tau_m'],
+                                                   1.e-3 * self.NP['tau_syn'],
+                                                   1.e-3 * self.NP['t_ref'],
                                                    self.NP['theta'],
                                                    self.NP['V_reset'],
                                                    mu[i], sigma[i]) for i in range(len(mu))])
         # Unit: 1/(mV)**2
-        d_nu_d_sigma = np.array([d_nu_d_sigma_fb_numeric(1.e-3*self.NP['tau_m'],
-                                                         1.e-3*self.NP['tau_syn'],
-                                                         1.e-3*self.NP['t_ref'],
+        d_nu_d_sigma = np.array([d_nu_d_sigma_fb_numeric(1.e-3 * self.NP['tau_m'],
+                                                         1.e-3 * self.NP['tau_syn'],
+                                                         1.e-3 * self.NP['t_ref'],
                                                          self.NP['theta'],
                                                          self.NP['V_reset'],
-                                                         mu[i], sigma[i])*1/(
-                                                             2. * sigma[i])
+                                                         mu[i], sigma[i]) * 1 / (
+                                         2. * sigma[i])
                                  for i in range(len(mu))])
         return d_nu_d_mu, d_nu_d_sigma
 
@@ -351,10 +354,10 @@ class Theory:
             contributing. Defaults to False.
         """
         if np.any(matrix_filter is not None):
-            assert(np.any(vector_filter is not None))
-            assert(self.network.N_vec[vector_filter].size *
-                   (self.network.N_vec[vector_filter].size + 1) ==
-                   self.network.K_matrix[matrix_filter].size)
+            assert (np.any(vector_filter is not None))
+            assert (self.network.N_vec[vector_filter].size *
+                    (self.network.N_vec[vector_filter].size + 1) ==
+                    self.network.K_matrix[matrix_filter].size)
             N = self.network.N_vec[vector_filter]
             K = (self.network.K_matrix[matrix_filter].reshape((N.size, N.size + 1)))[:, :-1]
             J = (self.network.J_matrix[matrix_filter].reshape((N.size, N.size + 1)))[:, :-1]
@@ -384,7 +387,7 @@ class Theory:
             slope_mu_matrix[:, i] = d_nu_d_mu
             slope_sigma_matrix[:, i] = d_nu_d_sigma
         G = self.NP['tau_m'] * 1e-3 * (slope_mu_matrix * K * J +
-                                       slope_sigma_matrix * K * J**2)
+                                       slope_sigma_matrix * K * J ** 2)
         if full_output:
             return G, d_nu_d_mu, d_nu_d_sigma
         else:

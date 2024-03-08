@@ -135,6 +135,7 @@ class Network:
         if self.stim_dict['dc_input']:
             self.__connect_dc_stim_input()
 
+        nest.BuildNetwork()
         nest.Prepare()
 
     def simulate(self, t_sim):
@@ -155,6 +156,7 @@ class Network:
             print('Simulating {} ms.'.format(t_sim))
 
         try:
+            nest.BuildNetwork()
             nest.Prepare()
         except BaseException:
             print(

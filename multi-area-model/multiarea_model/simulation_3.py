@@ -313,6 +313,7 @@ class Simulation:
         print("Saved network in {0:2f} seconds.".format(time.time() - t3))
 
         t4 = time.time()
+        nest.BuildNetwork()
         nest.Prepare()
         self.time_network_prepare = time.time() - t4
         print("Network preparation time in {0:.2f} seconds.".format(self.time_network_prepare))
