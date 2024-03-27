@@ -405,6 +405,9 @@ def run_simulation():
         presim_steps += 1
 
     PreparationTime = time.time() - tic
+
+    time_simulate_presim = nest.kernel_status["time_simulate"]
+
     tic = time.time()
 
     for d in range(sim_steps):
@@ -443,7 +446,9 @@ def run_simulation():
          'total_memory_peak': total_memory_peak,
          'average_rate': average_rate}
     d.update(build_dict)
-    d.update(nest.kernel_status)
+    final_kernel_status = nest.kernel_status
+    final_kernel_status["time_simulate"] -= time_simulate_presim
+    d.update(final_kernel_status)
     print(d)
 
     nest.Cleanup()
