@@ -142,7 +142,7 @@ brunel_params = {
 
     'Nrec': 1000,  # number of neurons to record spikes from
 
-    'model_params': {  # Set variables for iaf_psc_alpha
+    'model_params': {  # Set variables for iaf_psc_alpha_hom
         'E_L': 0.0,  # Resting membrane potential(mV)
         'C_m': 250.0,  # Capacity of the membrane(pF)
         'tau_m': 10.0,  # Membrane time constant(ms)
@@ -217,10 +217,10 @@ def build_network():
         nest.SetKernelStatus(extra_params)
 
     nest.message(M_INFO, 'build_network', 'Creating excitatory population.')
-    E_neurons = nest.Create('iaf_psc_alpha', NE, params=model_params)
+    E_neurons = nest.Create('iaf_psc_alpha_hom', NE, params=model_params)
 
     nest.message(M_INFO, 'build_network', 'Creating inhibitory population.')
-    I_neurons = nest.Create('iaf_psc_alpha', NI, params=model_params)
+    I_neurons = nest.Create('iaf_psc_alpha_hom', NI, params=model_params)
 
     if brunel_params['randomize_Vm']:
         nest.message(M_INFO, 'build_network',
