@@ -177,7 +177,7 @@ brunel_params = {
     'stdp_params': {
         'delay': 1.5,
         'alpha': 0.0513,
-        'lambda': 0.1,  # STDP step size
+        'lambda': 0.0,  # STDP step size
         'mu': 0.4,  # STDP weight dependence exponent(potentiation)
         'tau_plus': 15.0,  # time constant for potentiation
         'tau_minus': 30.0,  # time constant for STDP(depression)
